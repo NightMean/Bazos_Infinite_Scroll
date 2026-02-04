@@ -1,0 +1,142 @@
+// ==UserScript==
+// @name         Bazos Infinite Scroll
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Infinite scroll for Bazos websites
+// @author       NightMean
+// @match        https://*.bazos.sk/*
+// @match        https://*.bazos.cz/*
+// @grant        none
+// @downloadURL  https://raw.githubusercontent.com/NightMean/Bazos_Infinite_Scroll/main/bazos_autopager.user.js
+// @updateURL    https://raw.githubusercontent.com/NightMean/Bazos_Infinite_Scroll/main/bazos_autopager.user.js
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    let isLoading = false;
+    let offset = 0;
+    const itemsPerPage = 20;
+
+    // Helper to get current offset from URL
+    function getInitialOffset() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const crp = urlParams.get('crp');
+        if (crp) return parseInt(crp, 10);
+
+        // Check for path-based pagination (e.g., /20/)
+        const path = window.location.pathname;
+        const match = path.match(/\/(\d+)\/?$/);
+        if (match) {
+            return parseInt(match[1], 10);
+        }
+
+        return 0;
+    }
+
+    offset = getInitialOffset();
+
+    // Function to fetch next page
+    async function loadNextPage() {
+        if (isLoading) return;
+        isLoading = true;
+
+        const nextOffset = offset + itemsPerPage;
+        const currentUrl = new URL(window.location.href);
+
+        // Strip existing path-based pagination if present before adding crp
+        // e.g., /Category/20/ -> /Category/
+        currentUrl.pathname = currentUrl.pathname.replace(/\/(\d+)\/?$/, '/');
+
+        currentUrl.searchParams.set('crp', nextOffset);
+
+        console.log(`[Bazos Infinite Scroll] Loading next page: ${nextOffset} from ${currentUrl.toString()}`);
+
+        try {
+            const response = await fetch(currentUrl.toString());
+            if (!response.ok) {
+                console.error(`[Bazos Infinite Scroll] Failed to load next page (Status: ${response.status}). Stopping.`);
+                window.removeEventListener('scroll', handleScroll);
+                return;
+            }
+            const text = await response.text();
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, 'text/html');
+
+            // Allow multiple potential main content selectors based on analysis
+            // .maincontent is usually the wrapper, but sometimes items are directly in forms or other divs
+            // Best bet: find the parent of the first .inzeraty on the current page
+            const currentAd = document.querySelector('.inzeraty');
+            if (!currentAd) {
+                console.log('[Bazos Infinite Scroll] No listings found on current page, stopping.');
+                return;
+            }
+            const container = currentAd.parentElement;
+
+            const newAds = doc.querySelectorAll('.inzeraty');
+            console.log(`[Bazos Infinite Scroll] Found ${newAds.length} new listings`);
+
+            if (newAds.length === 0) {
+                console.log('[Bazos Infinite Scroll] No more listings found.');
+                window.removeEventListener('scroll', handleScroll);
+                const endMsg = document.createElement('div');
+                endMsg.style.textAlign = 'center';
+                endMsg.style.padding = '20px';
+                endMsg.style.fontWeight = 'bold';
+                endMsg.innerText = '--- Koniec výsledkov ---';
+                // Insert end message before footer if possible
+                const insertTarget = container.querySelector('#container_two') || container.querySelector('.strankovani');
+                if (insertTarget) {
+                    container.insertBefore(endMsg, insertTarget);
+                } else {
+                    container.appendChild(endMsg);
+                }
+                return;
+            }
+
+            // Append new listings
+            // We want to insert valid listings BEFORE the footer/pagination/sponsored content
+            // The structure is usually: [Listings...] [Sponsored(#container_two)] [Pagination(.strankovani)]
+            // So we look for the first of these to exist.
+            const insertTarget = container.querySelector('#container_two') || container.querySelector('.strankovani');
+
+            newAds.forEach(ad => {
+                if (insertTarget) {
+                    container.insertBefore(ad, insertTarget);
+                } else {
+                    container.appendChild(ad);
+                }
+            });
+
+            // Update offset
+            offset = nextOffset;
+
+            // Update history to allow back button to work somewhat (optional, maybe skip for simple infinite scroll)
+            // history.replaceState(null, '', currentUrl.toString());
+
+        } catch (error) {
+            console.error('[Bazos Infinite Scroll] Error loading next page:', error);
+            // Optionally stop on error to prevent loops
+            window.removeEventListener('scroll', handleScroll);
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    function handleScroll() {
+        const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+
+        // Load when within 500px of bottom
+        if (scrollTop + clientHeight >= scrollHeight - 800) {
+            loadNextPage();
+        }
+    }
+
+    // Identify if we are on a list page
+    if (document.querySelector('.inzeraty')) {
+        console.log('[Bazos Infinite Scroll] Initialized');
+        window.addEventListener('scroll', handleScroll);
+    }
+
+})();
