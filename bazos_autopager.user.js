@@ -6,6 +6,8 @@
 // @author       NightMean
 // @match        https://*.bazos.sk/*
 // @match        https://*.bazos.cz/*
+// @match        https://*.bazos.at/*
+// @match        https://*.bazos.pl/*
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/NightMean/Bazos_Infinite_Scroll/main/bazos_autopager.user.js
 // @updateURL    https://raw.githubusercontent.com/NightMean/Bazos_Infinite_Scroll/main/bazos_autopager.user.js
@@ -35,6 +37,14 @@
     }
 
     offset = getInitialOffset();
+
+    // STRICT CHECK: Only enable infinite scroll if pagination exists ("Next" button usually)
+    // This prevents running on pages like "Moje inzeráty" causing infinite loops of duplicates
+    const hasPagination = document.querySelector('.strankovani');
+    if (!hasPagination) {
+        console.log('[Bazos Infinite Scroll] No pagination detected. Script will not run.');
+        return;
+    }
 
     // Function to fetch next page
     async function loadNextPage() {
@@ -74,25 +84,28 @@
             }
             const container = currentAd.parentElement;
 
-            const newAds = doc.querySelectorAll('.inzeraty');
+            const newAds = Array.from(doc.querySelectorAll('.inzeraty'));
             console.log(`[Bazos Infinite Scroll] Found ${newAds.length} new listings`);
 
             if (newAds.length === 0) {
                 console.log('[Bazos Infinite Scroll] No more listings found.');
                 window.removeEventListener('scroll', handleScroll);
-                const endMsg = document.createElement('div');
-                endMsg.style.textAlign = 'center';
-                endMsg.style.padding = '20px';
-                endMsg.style.fontWeight = 'bold';
-                endMsg.innerText = '--- Koniec výsledkov ---';
-                // Insert end message before footer if possible
-                const insertTarget = container.querySelector('#container_two') || container.querySelector('.strankovani');
-                if (insertTarget) {
-                    container.insertBefore(endMsg, insertTarget);
-                } else {
-                    container.appendChild(endMsg);
-                }
+                appendEndMessage(container);
                 return;
+            }
+
+            // DEDUPLICATION SAFEGUARD
+            // Check if the first new ad is already on the page.
+            // This handles cases where the server ignores '?crp=' and returns the first page again.
+            const firstNewAdLink = newAds[0].querySelector('a');
+            if (firstNewAdLink) {
+                const existingLink = document.querySelector(`.inzeraty a[href="${firstNewAdLink.getAttribute('href')}"]`);
+                if (existingLink) {
+                    console.warn('[Bazos Infinite Scroll] Detected duplicate content. Server likely ignored pagination. Stopping.');
+                    window.removeEventListener('scroll', handleScroll);
+                    appendEndMessage(container);
+                    return;
+                }
             }
 
             // Append new listings
@@ -121,6 +134,21 @@
             window.removeEventListener('scroll', handleScroll);
         } finally {
             isLoading = false;
+        }
+    }
+
+    function appendEndMessage(container) {
+        const endMsg = document.createElement('div');
+        endMsg.style.textAlign = 'center';
+        endMsg.style.padding = '20px';
+        endMsg.style.fontWeight = 'bold';
+        endMsg.innerText = '--- Koniec výsledkov ---';
+        // Insert end message before footer if possible
+        const insertTarget = container.querySelector('#container_two') || container.querySelector('.strankovani');
+        if (insertTarget) {
+            container.insertBefore(endMsg, insertTarget);
+        } else {
+            container.appendChild(endMsg);
         }
     }
 

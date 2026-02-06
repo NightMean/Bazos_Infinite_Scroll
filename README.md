@@ -18,6 +18,8 @@ A userscript to enable infinite scrolling on Bazos websites. It automatically lo
 
 -   **Bazos.sk** (Slovakia)
 -   **Bazos.cz** (Czech Republic)
+-   **Bazos.at** (Austria)
+-   **Bazos.pl** (Poland)
 
 ## Installation
 

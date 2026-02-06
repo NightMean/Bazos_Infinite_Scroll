@@ -12,6 +12,8 @@ Použivateľský skript pre Bazos, ktorý umožňuje nekonečné načítavanie. 
 
 -   **Bazos.sk** (Slovensko)
 -   **Bazos.cz** (Česko)
+-   **Bazos.at** (Rakúsko)
+-   **Bazos.pl** (Poľsko)
 
 ## Inštalácia
 
