@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bazos Infinite Scroll
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Infinite scroll for Bazos websites
 // @author       NightMean
 // @match        https://*.bazos.sk/*
@@ -20,13 +20,19 @@
     let offset = 0;
     const itemsPerPage = 20;
 
+    // Helper to determine pagination parameter
+    function getPaginationParam() {
+        return window.location.pathname.includes('search.php') ? 'crz' : 'crp';
+    }
+
     // Helper to get current offset from URL
     function getInitialOffset() {
         const urlParams = new URLSearchParams(window.location.search);
-        const crp = urlParams.get('crp');
-        if (crp) return parseInt(crp, 10);
+        const param = getPaginationParam();
+        const offsetVal = urlParams.get(param);
+        if (offsetVal) return parseInt(offsetVal, 10);
 
-        // Check for path-based pagination (e.g., /20/)
+        // Check for path-based pagination (e.g., /20/) - usually only for categories
         const path = window.location.pathname;
         const match = path.match(/\/(\d+)\/?$/);
         if (match) {
@@ -53,12 +59,16 @@
 
         const nextOffset = offset + itemsPerPage;
         const currentUrl = new URL(window.location.href);
+        const param = getPaginationParam();
 
-        // Strip existing path-based pagination if present before adding crp
+        // Strip existing path-based pagination if present before adding param
         // e.g., /Category/20/ -> /Category/
-        currentUrl.pathname = currentUrl.pathname.replace(/\/(\d+)\/?$/, '/');
+        // Only needed if we are NOT on search.php, because search.php uses query params
+        if (param === 'crp') {
+            currentUrl.pathname = currentUrl.pathname.replace(/\/(\d+)\/?$/, '/');
+        }
 
-        currentUrl.searchParams.set('crp', nextOffset);
+        currentUrl.searchParams.set(param, nextOffset);
 
         console.log(`[Bazos Infinite Scroll] Loading next page: ${nextOffset} from ${currentUrl.toString()}`);
 
